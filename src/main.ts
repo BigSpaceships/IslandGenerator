@@ -2,11 +2,15 @@ import './style.css';
 // import { log } from './logger';
 
 const svgElement = document.getElementsByTagName('svg')[0];
+const circleParentElement = document.getElementById("circle-group");
+const pathParentElement = document.getElementById("path-group");
 
 const radius = 5;
 const drag = 0.7;
 const gravity = .5;
 const tossSpeed = 75;
+
+let intervalID: number;
 
 function addVectors(a: Vector, b: Vector): Vector {
     return {
@@ -41,6 +45,15 @@ type Bean = {
     lastPos: Vector;
     posChange: Vector;
 };
+
+type Arc = {
+    pos1: Vector;
+    pos2: Vector;
+    direction: number;
+    large: number;
+}
+
+
 
 function generateBeanBlob(count: number, width: number, height: number, xOffset = width / 2, yOffset = height / 2, zOffset = 50): Bean[] {
     let beanArray = [] as Bean[];
@@ -82,6 +95,8 @@ function simulateBeans(beans: Bean[]): Bean[] {
         beans[i].posChange = { x: 0, y: 0, z: 0 };
     }
 
+    let movingBeans = 0;
+    
     for (let i = 0; i < beans.length; i++) {
         const oldPos = beans[i].pos;
 
@@ -137,15 +152,25 @@ function simulateBeans(beans: Bean[]): Bean[] {
 
         beans[i].pos = addVectors(beans[i].pos, beans[i].posChange);
 
+        // console.log(beans[i].pos.z)
+        
+        if (vectorMagnitude(beans[i].posChange) > 0 || beans[i].pos.z != radius) {
+            movingBeans++;
+        }
+
         beans[i].lastPos = oldPos;
     }
 
+    if (movingBeans == 0) {
+        finishMoving(beans);
+    }
+    
     return beans;
 }
 
 function drawBeans(beans: Bean[]): void {
-  while (svgElement.lastChild) {
-    svgElement.removeChild(svgElement.lastChild);
+  while (circleParentElement?.lastChild) {
+    circleParentElement.removeChild(circleParentElement.lastChild);
   }
 
   beans.forEach((bean: Bean) => {
@@ -164,8 +189,236 @@ function drawBeans(beans: Bean[]): void {
       `rgb(${zColor}, ${zColor}, ${zColor})`
     );
 
-    svgElement.appendChild(newCircleElement);
+    circleParentElement?.appendChild(newCircleElement);
   });
+}
+
+function drawOutlineForBeans(beans: Bean[]): void {
+    drawBeans(beans);
+    
+    const firstBean = beans[0].pos;
+    const secondBean = beans[1].pos;
+    const vectorBetween = subVectors(firstBean, secondBean);
+
+    const distanceSquared = ((firstBean.x - secondBean.x) * (firstBean.x - secondBean.x) + (firstBean.y - secondBean.y) * (firstBean.y - secondBean.y)) / 4;
+    const distanceToPoints = Math.sqrt(10 * 10 - distanceSquared);
+
+    const slope = -vectorBetween.x / vectorBetween.y;
+
+    const xChange = Math.sqrt(distanceToPoints * distanceToPoints / (1 + slope * slope));
+
+    const firstIntersectionPos = {
+        x: (firstBean.x + secondBean.x) / 2 + xChange,
+        y: (firstBean.y + secondBean.y) / 2 + slope * xChange,
+        z: 0,
+    }
+
+    const secondIntersectionPos = {
+        x: (firstBean.x + secondBean.x) / 2 - xChange,
+        y: (firstBean.y + secondBean.y) / 2 - slope * xChange,
+        z: 0,
+    }
+
+    let pathInstructions: string[] = [] as string[];
+
+    pathInstructions.push(`M ${firstIntersectionPos.x} ${firstIntersectionPos.y}`);
+    pathInstructions.push(`A 10 10 0 1 0 ${secondIntersectionPos.x} ${secondIntersectionPos.y}`);
+    pathInstructions.push(`A 10 10 0 1 0 ${firstIntersectionPos.x} ${firstIntersectionPos.y}`);
+
+    const pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    pathElement.setAttribute("d", pathInstructions.join(' '));
+
+    pathParentElement?.appendChild(pathElement)
+    
+}
+
+function getExtraDistance(beans: Bean[], bean: Bean, indexToAdd: number): number {
+    const firstBean: Bean = beans[indexToAdd];
+
+    const secondBean: Bean = indexToAdd == beans.length ? beans[0] : beans[indexToAdd];
+
+    const distance = vectorMagnitude(subVectors(firstBean.pos, secondBean.pos));
+
+    const distBetweenFirstAndMid = vectorMagnitude(subVectors(firstBean.pos, bean.pos));
+
+    const distBetweenMidAndSecond = vectorMagnitude(subVectors(secondBean.pos, bean.pos));
+
+    return distBetweenMidAndSecond + distBetweenFirstAndMid - distance;
+}
+
+function shortestPath(group: Bean[]) {
+    
+    const usedBeans = [group[0], group[1]];
+
+    for (let i = 2; i < group.length; i++) {
+        const pos = [...Array(usedBeans.length).keys()] // array from 0 ... usedBeans.length - 1
+            .reduce((shortest, test) => { // indices
+            return getExtraDistance(usedBeans, group[i], shortest) < getExtraDistance(usedBeans, group[i], test) ? shortest : test;
+        })
+
+        usedBeans.splice(pos, 0, group[i])
+    }
+
+    return usedBeans;
+}
+
+function trimArcs(arcs: Arc[])
+
+function drawGroup(group: Bean[]): void {
+    const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+    const arcs = [] as Arc[];
+    // const usedBeans = shortestPath(group);
+    const closeEnoughBeans: number[][] = [[]] as number[][];
+
+    for (let i = 0; i < group.length; i++) {
+        closeEnoughBeans.push([])
+        for (let j = i; j < group.length; j++) {
+            if (i == j) continue;
+
+            if (vectorMagnitude(subVectors(group[i].pos, group[j].pos)) < 20) {
+                closeEnoughBeans[i].push(j);
+            }
+        }
+    }
+
+    const arcsForBean: number[][] = [[]] as number[][];
+
+    for (let i = 0; i < group.length; i++) {
+        arcsForBean.push([])
+    }
+
+    for (let i = 0; i < group.length; i++) {
+        for (let j = 0; j < closeEnoughBeans[i].length; j++) {
+            const firstBean = group[i].pos;
+            const secondBean = group[closeEnoughBeans[i][j]].pos;
+            const vectorBetween = subVectors(firstBean, secondBean);
+
+            const distanceSquared = ((firstBean.x - secondBean.x) * (firstBean.x - secondBean.x) + (firstBean.y - secondBean.y) * (firstBean.y - secondBean.y)) / 4;
+            const distanceToPoints = Math.sqrt(10 * 10 - distanceSquared);
+
+            const slope = -vectorBetween.x / vectorBetween.y;
+
+            const xChange = Math.sqrt(distanceToPoints * distanceToPoints / (1 + slope * slope));
+
+            const firstIntersectionPos = {
+                x: (firstBean.x + secondBean.x) / 2 + xChange,
+                y: (firstBean.y + secondBean.y) / 2 + slope * xChange,
+                z: 0,
+            }
+
+            const secondIntersectionPos = {
+                x: (firstBean.x + secondBean.x) / 2 - xChange,
+                y: (firstBean.y + secondBean.y) / 2 - slope * xChange,
+                z: 0,
+            }
+
+            const arc1: Arc = {
+                pos1: firstIntersectionPos,
+                pos2: secondIntersectionPos,
+                direction: 0,
+                large: 1,
+            }
+
+            const arc2: Arc = {
+                pos1: secondIntersectionPos,
+                pos2: firstIntersectionPos,
+                direction: 0,
+                large: 1,
+            }
+
+            const index1 = arcs.length;
+            const index2 = arcs.length + 1;
+
+            arcs.push(arc1, arc2)
+
+            arcsForBean[i].push(index1, index2);
+            arcsForBean[closeEnoughBeans[i][j]].push(index1, index2);
+        }
+    }
+    
+    let pathString: string[] = [] as string[];
+
+    pathString.push(`M ${arcs[0].pos1.x} ${arcs[0].pos1.y}`);
+
+    for (let i = 1; i < arcs.length; i++) {
+        const arc = arcs[i];
+
+        pathString.push(`M ${arc.pos1.x} ${arc.pos1.y}`)
+        pathString.push(`A 10 10 0 ${arc.large} ${arc.direction} ${arc.pos2.x} ${arc.pos2.y}`);
+    }
+
+    // pathString.push(`L ${points[0].x} ${points[0].y}`);
+
+    pathEl.setAttribute("d", pathString.join(' '))
+
+    pathParentElement?.appendChild(pathEl);
+}
+
+function finishMoving(beans: Bean[]) {
+    window.clearInterval(intervalID);
+
+    console.log("done")
+
+    let groups: Bean[][] = [[]] as Bean[][];
+
+    beans.sort((a, b) => {
+        const aMag = vectorMagnitude(a.pos);
+        const bMag = vectorMagnitude(b.pos);
+
+        if (aMag > bMag) {
+            return 1;
+        }
+
+        if (aMag < bMag) {
+            return -1;
+        }
+
+        return 0;
+    })
+
+    groups[0].push(beans[0]);
+
+    // console.log(groups.length)
+    
+    for (let i = 1; i < beans.length; i++) {
+        let newIndex = -1;
+        
+        for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+            let add = false;
+            for(let j = 0; j < groups[groupIndex].length; j++) {
+                // console.log
+                let distance = vectorMagnitude(subVectors(beans[i].pos, groups[groupIndex][j].pos))
+
+                if (distance < 20) {
+                    add = true;
+                }
+            }
+
+            if (add) {
+                newIndex = groupIndex;
+            }
+        }
+
+        if (newIndex == -1) {
+            groups.push([beans[i]]);
+        } else {
+            groups[newIndex].push(beans[i]);
+        }
+    }
+
+    const largestGroup = groups.reduce((largest, other) => {
+        return largest.length > other.length ? largest : other;
+    })
+
+    console.log(largestGroup)
+
+    drawBeans(largestGroup);
+    drawGroup(largestGroup);
+    
+    // groups.forEach((group: Bean[]) => {
+    //     drawGroup(group);
+    // })
 }
 
 function generateIsland() {
@@ -188,10 +441,41 @@ function generateIsland() {
 
     // drawBeans(beans);
 
-    window.setInterval(() => {
+    const firstBean: Bean = {
+        pos: {
+                x: 25,
+                y: 25,
+                z: 0
+            },
+        lastPos: {
+                x: 25,
+                y: 25,
+                z: 0
+            },
+        posChange: {x: 0, y: 0, z: 0}
+    }
+
+    const secondBean: Bean = {
+        pos: {
+                x: 40,
+                y: 35,
+                z: 0
+            },
+        lastPos: {
+                x: 30,
+                y: 35,
+                z: 0
+            },
+        posChange: {x: 0, y: 0, z: 0}
+    }
+    
+    drawOutlineForBeans([firstBean, secondBean]);
+
+    intervalID = window.setInterval(() => {
+        drawBeans(beans);
+
         beans = simulateBeans(beans);
 
-        drawBeans(beans);
     }, 1);
 }
 

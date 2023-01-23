@@ -19,3 +19,8 @@ div#log {
   width: 100%;
   background-color: #eee;
 }
+
+path {
+    fill: none;
+    stroke: red;
+}
