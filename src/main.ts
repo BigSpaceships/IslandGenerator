@@ -9,6 +9,7 @@ const radius = 5;
 const drag = 0.7;
 const gravity = .5;
 const tossSpeed = 75;
+const arcRadius = 10;
 
 let intervalID: number;
 
@@ -46,14 +47,18 @@ type Bean = {
     posChange: Vector;
 };
 
-type Arc = {
+type ArcWithPos = {
     pos1: Vector;
     pos2: Vector;
     direction: number;
     large: number;
 }
 
-
+type ArcAngle = {
+    center: Vector;
+    start: number;
+    end: number;
+}
 
 function generateBeanBlob(count: number, width: number, height: number, xOffset = width / 2, yOffset = height / 2, zOffset = 50): Bean[] {
     let beanArray = [] as Bean[];
@@ -193,37 +198,47 @@ function drawBeans(beans: Bean[]): void {
   });
 }
 
-function drawOutlineForBeans(beans: Bean[]): void {
-    drawBeans(beans);
-    
-    const firstBean = beans[0].pos;
-    const secondBean = beans[1].pos;
-    const vectorBetween = subVectors(firstBean, secondBean);
+function getPoints(beanOne: Bean | Vector, beanTwo: Bean | Vector): {posOne: Vector, posTwo: vector}  {
+    // TODO: not typescript
+    const firstBeanPos = beanOne.pos == undefined ? beanOne : beanOne.pos; 
+    const secondBeanPos = beanTwo.pos == undefined ? beanTwo : beanTwo.pos;
+    const vectorBetween = subVectors(firstBeanPos, secondBeanPos);
 
-    const distanceSquared = ((firstBean.x - secondBean.x) * (firstBean.x - secondBean.x) + (firstBean.y - secondBean.y) * (firstBean.y - secondBean.y)) / 4;
-    const distanceToPoints = Math.sqrt(10 * 10 - distanceSquared);
+    const distanceSquared = ((firstBeanPos.x - secondBeanPos.x) * (firstBeanPos.x - secondBeanPos.x) + (firstBeanPos.y - secondBeanPos.y) * (firstBeanPos.y - secondBeanPos.y)) / 4;
+    const distanceToPoints = Math.sqrt(arcRadius * arcRadius - distanceSquared);
 
     const slope = -vectorBetween.x / vectorBetween.y;
 
     const xChange = Math.sqrt(distanceToPoints * distanceToPoints / (1 + slope * slope));
 
     const firstIntersectionPos = {
-        x: (firstBean.x + secondBean.x) / 2 + xChange,
-        y: (firstBean.y + secondBean.y) / 2 + slope * xChange,
+        x: (firstBeanPos.x + secondBeanPos.x) / 2 + xChange,
+        y: (firstBeanPos.y + secondBeanPos.y) / 2 + slope * xChange,
         z: 0,
     }
 
     const secondIntersectionPos = {
-        x: (firstBean.x + secondBean.x) / 2 - xChange,
-        y: (firstBean.y + secondBean.y) / 2 - slope * xChange,
+        x: (firstBeanPos.x + secondBeanPos.x) / 2 - xChange,
+        y: (firstBeanPos.y + secondBeanPos.y) / 2 - slope * xChange,
         z: 0,
     }
 
+    return {
+        posOne: firstIntersectionPos,
+        posTwo: secondIntersectionPos,
+    }
+}
+
+function drawOutlineForBeans(beans: Bean[]): void {
+    drawBeans(beans);
+
+    const {posOne, posTwo} = getPoints(beans[0], beans[1]);
+
     let pathInstructions: string[] = [] as string[];
 
-    pathInstructions.push(`M ${firstIntersectionPos.x} ${firstIntersectionPos.y}`);
-    pathInstructions.push(`A 10 10 0 1 0 ${secondIntersectionPos.x} ${secondIntersectionPos.y}`);
-    pathInstructions.push(`A 10 10 0 1 0 ${firstIntersectionPos.x} ${firstIntersectionPos.y}`);
+    pathInstructions.push(`M ${posOne.x} ${posOne.y}`);
+    pathInstructions.push(`A ${arcRadius} ${arcRadius} 0 1 0 ${posTwo.x} ${posTwo.y}`);
+    pathInstructions.push(`A ${arcRadius} ${arcRadius} 0 1 0 ${posOne.x} ${posOne.y}`);
 
     const pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
     pathElement.setAttribute("d", pathInstructions.join(' '));
@@ -262,12 +277,29 @@ function shortestPath(group: Bean[]) {
     return usedBeans;
 }
 
-function trimArcs(arcs: Arc[])
+function trimArcs(arcs: ArcAngle[], indicies: number[]): ArcAngle[] {
+    for (let i = 0; i < indicies.length; i++) {
+        for (let j = i; j < indicies.length; j++) {
+            const arc1 = arcs[i];
+            const arc2 = arcs[j];
+            
+            const distance = vectorMagnitude(subVectors(arc1.center, arc2.center));
+
+            if (distance > 2 * arcRadius || distance == 0 ) {
+                continue;
+            }
+
+            // const {posOne, posTwo} = getPoints(arc1.center, arc2.center);
+        }
+    }
+
+    return arcs;
+}
 
 function drawGroup(group: Bean[]): void {
     const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
 
-    const arcs = [] as Arc[];
+    let arcs = [] as ArcAngle[];
     // const usedBeans = shortestPath(group);
     const closeEnoughBeans: number[][] = [[]] as number[][];
 
@@ -276,7 +308,7 @@ function drawGroup(group: Bean[]): void {
         for (let j = i; j < group.length; j++) {
             if (i == j) continue;
 
-            if (vectorMagnitude(subVectors(group[i].pos, group[j].pos)) < 20) {
+            if (vectorMagnitude(subVectors(group[i].pos, group[j].pos)) < 2 * arcRadius) {
                 closeEnoughBeans[i].push(j);
             }
         }
@@ -292,43 +324,54 @@ function drawGroup(group: Bean[]): void {
         for (let j = 0; j < closeEnoughBeans[i].length; j++) {
             const firstBean = group[i].pos;
             const secondBean = group[closeEnoughBeans[i][j]].pos;
-            const vectorBetween = subVectors(firstBean, secondBean);
-
-            const distanceSquared = ((firstBean.x - secondBean.x) * (firstBean.x - secondBean.x) + (firstBean.y - secondBean.y) * (firstBean.y - secondBean.y)) / 4;
-            const distanceToPoints = Math.sqrt(10 * 10 - distanceSquared);
-
-            const slope = -vectorBetween.x / vectorBetween.y;
-
-            const xChange = Math.sqrt(distanceToPoints * distanceToPoints / (1 + slope * slope));
-
-            const firstIntersectionPos = {
-                x: (firstBean.x + secondBean.x) / 2 + xChange,
-                y: (firstBean.y + secondBean.y) / 2 + slope * xChange,
-                z: 0,
-            }
-
-            const secondIntersectionPos = {
-                x: (firstBean.x + secondBean.x) / 2 - xChange,
-                y: (firstBean.y + secondBean.y) / 2 - slope * xChange,
-                z: 0,
-            }
-
-            const arc1: Arc = {
-                pos1: firstIntersectionPos,
-                pos2: secondIntersectionPos,
-                direction: 0,
-                large: 1,
-            }
-
-            const arc2: Arc = {
-                pos1: secondIntersectionPos,
-                pos2: firstIntersectionPos,
-                direction: 0,
-                large: 1,
-            }
 
             const index1 = arcs.length;
             const index2 = arcs.length + 1;
+            
+            const {posOne, posTwo} = getPoints(group[i], group[closeEnoughBeans[i][j]])
+
+            const relativePosOne = subVectors(posOne, firstBean);
+            const relativePosTwo = subVectors(posTwo, firstBean);
+            const theta1 = Math.atan2(relativePosOne.y, relativePosOne.x);
+            const theta2 = Math.atan2(relativePosTwo.y, relativePosTwo.x);
+
+            const arc1Start = theta2 - theta1 > Math.PI ? theta1 : theta2;
+            const arc1End = theta2 - theta1 > Math.PI ? theta2 : theta1;
+            
+            const arc1: ArcAngle = {
+                center: firstBean,
+                start: arc1Start,
+                end: arc1End,
+            }
+
+            const relativePosThree = subVectors(posOne, secondBean);
+            const relativePosFour = subVectors(posTwo, secondBean);
+            const theta3 = Math.atan2(relativePosThree.y, relativePosThree.x);
+            const theta4 = Math.atan2(relativePosFour.y, relativePosFour.x);
+
+            const arc2Start = theta4 - theta3 > Math.PI ? theta3 : theta4;
+            const arc2End = theta4 - theta3 > Math.PI ? theta4 : theta3;
+            
+            const arc2: ArcAngle = {
+                center: secondBean,
+                start: arc2Start,
+                end: arc2End,
+            }
+            
+            // const arc1: ArcWithPos = {
+            //     pos1: firstIntersectionPos,
+            //     pos2: secondIntersectionPos,
+            //     direction: 0,
+            //     large: 1,
+            // }
+
+            // const arc2: ArcWithPos = {
+            //     pos1: secondIntersectionPos,
+            //     pos2: firstIntersectionPos,
+            //     direction: 0,
+            //     large: 1,
+            // }
+
 
             arcs.push(arc1, arc2)
 
@@ -339,10 +382,39 @@ function drawGroup(group: Bean[]): void {
     
     let pathString: string[] = [] as string[];
 
-    pathString.push(`M ${arcs[0].pos1.x} ${arcs[0].pos1.y}`);
+    for (let i = 0; i < group.length; i++) {
+        arcs = trimArcs(arcs, arcsForBean[i]);
+    }
 
-    for (let i = 1; i < arcs.length; i++) {
+    const arcsByPos: ArcsWithPos = [] as ArcsWithPos[];
+
+    for (let i = 0; i < arcs.length; i++) {
         const arc = arcs[i];
+
+        console.log(arc)
+        
+        const posOne: Vector = {
+            x: Math.sin(arc.start) * arcRadius + arc.center.x,
+            y: Math.cos(arc.start) * arcRadius + arc.center.y,
+        }
+
+        const posTwo: Vector = {
+            x: Math.sin(arc.end) * arcRadius + arc.center.x,
+            y: Math.cos(arc.end) * arcRadius + arc.center.y,
+        }
+
+        arcsByPos.push({
+            pos1: posOne,
+            pos2: posTwo,
+            direction: 0,
+            large: 1,
+        })
+    }
+
+    pathString.push(`M ${arcsByPos[0].pos1.x} ${arcsByPos[0].pos1.y}`);
+
+    for (let i = 1; i < arcsByPos.length; i++) {
+        const arc = arcsByPos[i];
 
         pathString.push(`M ${arc.pos1.x} ${arc.pos1.y}`)
         pathString.push(`A 10 10 0 ${arc.large} ${arc.direction} ${arc.pos2.x} ${arc.pos2.y}`);
@@ -390,7 +462,7 @@ function finishMoving(beans: Bean[]) {
                 // console.log
                 let distance = vectorMagnitude(subVectors(beans[i].pos, groups[groupIndex][j].pos))
 
-                if (distance < 20) {
+                if (distance < 2 * arcRadius) {
                     add = true;
                 }
             }
@@ -413,8 +485,8 @@ function finishMoving(beans: Bean[]) {
 
     console.log(largestGroup)
 
-    drawBeans(largestGroup);
-    drawGroup(largestGroup);
+    // drawBeans(largestGroup);
+    // drawGroup(largestGroup);
     
     // groups.forEach((group: Bean[]) => {
     //     drawGroup(group);
@@ -424,7 +496,7 @@ function finishMoving(beans: Bean[]) {
 function generateIsland() {
     let beans = generateBeanBlob(Math.random() * 250, window.innerWidth, window.innerHeight);
 
-    drawBeans(beans);
+    // drawBeans(beans);
 
     for (let i = 0; i < 4; i++) {
         const theta = Math.random() * Math.PI * 2;
@@ -469,10 +541,10 @@ function generateIsland() {
         posChange: {x: 0, y: 0, z: 0}
     }
     
-    drawOutlineForBeans([firstBean, secondBean]);
+    drawGroup([firstBean, secondBean]);
 
     intervalID = window.setInterval(() => {
-        drawBeans(beans);
+        // drawBeans(beans);
 
         beans = simulateBeans(beans);
 
