@@ -198,10 +198,10 @@ function drawBeans(beans: Bean[]): void {
   });
 }
 
-function getPoints(beanOne: Bean | Vector, beanTwo: Bean | Vector): {posOne: Vector, posTwo: vector}  {
+function getPoints(beanOne: Bean | Vector, beanTwo: Bean | Vector): {posOne: Vector, posTwo: Vector}  {
     // TODO: not typescript
-    const firstBeanPos = beanOne.pos == undefined ? beanOne : beanOne.pos; 
-    const secondBeanPos = beanTwo.pos == undefined ? beanTwo : beanTwo.pos;
+    const firstBeanPos: Vector = (<Bean>beanOne).pos ? beanOne as Vector : (<Bean>beanOne).pos; 
+    const secondBeanPos: Vector = (<Bean>beanTwo).pos ? beanTwo as Vector : (<Bean>beanTwo).pos;
     const vectorBetween = subVectors(firstBeanPos, secondBeanPos);
 
     const distanceSquared = ((firstBeanPos.x - secondBeanPos.x) * (firstBeanPos.x - secondBeanPos.x) + (firstBeanPos.y - secondBeanPos.y) * (firstBeanPos.y - secondBeanPos.y)) / 4;
@@ -386,7 +386,7 @@ function drawGroup(group: Bean[]): void {
         arcs = trimArcs(arcs, arcsForBean[i]);
     }
 
-    const arcsByPos: ArcsWithPos = [] as ArcsWithPos[];
+    const arcsByPos: ArcWithPos[] = [] as ArcWithPos[];
 
     for (let i = 0; i < arcs.length; i++) {
         const arc = arcs[i];
@@ -396,11 +396,13 @@ function drawGroup(group: Bean[]): void {
         const posOne: Vector = {
             x: Math.sin(arc.start) * arcRadius + arc.center.x,
             y: Math.cos(arc.start) * arcRadius + arc.center.y,
+            z: 0,
         }
 
         const posTwo: Vector = {
             x: Math.sin(arc.end) * arcRadius + arc.center.x,
             y: Math.cos(arc.end) * arcRadius + arc.center.y,
+            z: 0,
         }
 
         arcsByPos.push({
