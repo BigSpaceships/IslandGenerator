@@ -199,9 +199,9 @@ function drawBeans(beans: Bean[]): void {
 }
 
 function getPoints(beanOne: Bean | Vector, beanTwo: Bean | Vector): {posOne: Vector, posTwo: Vector}  {
-    // TODO: not typescript
-    const firstBeanPos: Vector = (<Bean>beanOne).pos ? beanOne as Vector : (<Bean>beanOne).pos; 
-    const secondBeanPos: Vector = (<Bean>beanTwo).pos ? beanTwo as Vector : (<Bean>beanTwo).pos;
+    const firstBeanPos: Vector = (<Bean>beanOne).pos ? (<Bean>beanOne).pos : beanOne as Vector; 
+    const secondBeanPos: Vector = (<Bean>beanTwo).pos ? (<Bean>beanTwo).pos : beanTwo as Vector;
+
     const vectorBetween = subVectors(firstBeanPos, secondBeanPos);
 
     const distanceSquared = ((firstBeanPos.x - secondBeanPos.x) * (firstBeanPos.x - secondBeanPos.x) + (firstBeanPos.y - secondBeanPos.y) * (firstBeanPos.y - secondBeanPos.y)) / 4;
@@ -340,8 +340,8 @@ function drawGroup(group: Bean[]): void {
             
             const arc1: ArcAngle = {
                 center: firstBean,
-                start: arc1Start,
-                end: arc1End,
+                start: theta1,
+                end: theta2,
             }
 
             const relativePosThree = subVectors(posOne, secondBean);
@@ -354,8 +354,8 @@ function drawGroup(group: Bean[]): void {
             
             const arc2: ArcAngle = {
                 center: secondBean,
-                start: arc2Start,
-                end: arc2End,
+                start: theta3,
+                end: theta4,
             }
             
             // const arc1: ArcWithPos = {
@@ -379,6 +379,8 @@ function drawGroup(group: Bean[]): void {
             arcsForBean[closeEnoughBeans[i][j]].push(index1, index2);
         }
     }
+
+    console.log(arcs)
     
     let pathString: string[] = [] as string[];
 
@@ -413,9 +415,7 @@ function drawGroup(group: Bean[]): void {
         })
     }
 
-    pathString.push(`M ${arcsByPos[0].pos1.x} ${arcsByPos[0].pos1.y}`);
-
-    for (let i = 1; i < arcsByPos.length; i++) {
+    for (let i = 0; i < arcsByPos.length; i++) {
         const arc = arcsByPos[i];
 
         pathString.push(`M ${arc.pos1.x} ${arc.pos1.y}`)
@@ -543,6 +543,7 @@ function generateIsland() {
         posChange: {x: 0, y: 0, z: 0}
     }
     
+    drawBeans([firstBean, secondBean]);
     drawGroup([firstBean, secondBean]);
 
     intervalID = window.setInterval(() => {
