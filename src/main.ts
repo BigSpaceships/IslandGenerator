@@ -277,6 +277,17 @@ function shortestPath(group: Bean[]) {
     return usedBeans;
 }
 
+function radiansTraveled(start: number, end: number): number {
+    const startPositive = (start % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+    const endPositive = (end % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+
+    if (startPositive > endPositive) {
+        return start - end;
+    }
+
+    return 2 * Math.PI - (end - start);
+}
+
 function trimArcs(arcs: ArcAngle[], indicies: number[]): ArcAngle[] {
     for (let i = 0; i < indicies.length; i++) {
         for (let j = i; j < indicies.length; j++) {
@@ -298,7 +309,7 @@ function trimArcs(arcs: ArcAngle[], indicies: number[]): ArcAngle[] {
 
 function drawGroup(group: Bean[]): void {
     const pathEl = document.createElementNS("http://www.w3.org/2000/svg", "path");
-
+    
     let arcs = [] as ArcAngle[];
     // const usedBeans = shortestPath(group);
     const closeEnoughBeans: number[][] = [[]] as number[][];
@@ -335,13 +346,15 @@ function drawGroup(group: Bean[]): void {
             const theta1 = Math.atan2(relativePosOne.y, relativePosOne.x);
             const theta2 = Math.atan2(relativePosTwo.y, relativePosTwo.x);
 
-            const arc1Start = theta2 - theta1 > Math.PI ? theta1 : theta2;
-            const arc1End = theta2 - theta1 > Math.PI ? theta2 : theta1;
+            const distance1 = radiansTraveled(theta1, theta2);
+            
+            const arc1Start = distance1 > Math.PI ? theta1 : theta2;
+            const arc1End = distance1 > Math.PI ? theta2 : theta1;
             
             const arc1: ArcAngle = {
                 center: firstBean,
-                start: theta1,
-                end: theta2,
+                start: arc1Start,
+                end: arc1End,
             }
 
             const relativePosThree = subVectors(posOne, secondBean);
@@ -349,13 +362,15 @@ function drawGroup(group: Bean[]): void {
             const theta3 = Math.atan2(relativePosThree.y, relativePosThree.x);
             const theta4 = Math.atan2(relativePosFour.y, relativePosFour.x);
 
-            const arc2Start = theta4 - theta3 > Math.PI ? theta3 : theta4;
-            const arc2End = theta4 - theta3 > Math.PI ? theta4 : theta3;
+            const distance2 = radiansTraveled(theta3, theta4);
+
+            const arc2Start = distance2 > Math.PI ? theta3 : theta4;
+            const arc2End = distance2 > Math.PI ? theta4 : theta3;
             
             const arc2: ArcAngle = {
                 center: secondBean,
-                start: theta3,
-                end: theta4,
+                start: arc2Start,
+                end: arc2End,
             }
             
             // const arc1: ArcWithPos = {
@@ -380,7 +395,7 @@ function drawGroup(group: Bean[]): void {
         }
     }
 
-    console.log(arcs)
+    // console.log(arcs)
     
     let pathString: string[] = [] as string[];
 
@@ -388,22 +403,25 @@ function drawGroup(group: Bean[]): void {
         arcs = trimArcs(arcs, arcsForBean[i]);
     }
 
+    // arcs.pop();
+
     const arcsByPos: ArcWithPos[] = [] as ArcWithPos[];
 
     for (let i = 0; i < arcs.length; i++) {
         const arc = arcs[i];
 
-        console.log(arc)
+        console.log(arc, radiansTraveled(arc.start, arc.end));
+
         
         const posOne: Vector = {
-            x: Math.sin(arc.start) * arcRadius + arc.center.x,
-            y: Math.cos(arc.start) * arcRadius + arc.center.y,
+            x: Math.cos(arc.start) * arcRadius + arc.center.x,
+            y: Math.sin(arc.start) * arcRadius + arc.center.y,
             z: 0,
         }
 
         const posTwo: Vector = {
-            x: Math.sin(arc.end) * arcRadius + arc.center.x,
-            y: Math.cos(arc.end) * arcRadius + arc.center.y,
+            x: Math.cos(arc.end) * arcRadius + arc.center.x,
+            y: Math.sin(arc.end) * arcRadius + arc.center.y,
             z: 0,
         }
 
@@ -414,6 +432,8 @@ function drawGroup(group: Bean[]): void {
             large: 1,
         })
     }
+
+    // pathString.push(`M ${arcsByPos[0].pos1.x} ${arcsByPos[0].pos1.y}`)
 
     for (let i = 0; i < arcsByPos.length; i++) {
         const arc = arcsByPos[i];
@@ -487,8 +507,8 @@ function finishMoving(beans: Bean[]) {
 
     console.log(largestGroup)
 
-    // drawBeans(largestGroup);
-    // drawGroup(largestGroup);
+    drawBeans(largestGroup);
+    drawGroup(largestGroup);
     
     // groups.forEach((group: Bean[]) => {
     //     drawGroup(group);
