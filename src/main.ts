@@ -424,6 +424,36 @@ function renderArcs(arcs: ArcAngle[]): void {
     // pathString.push(`L ${points[0].x} ${points[0].y}`);
 }
 
+function trimArcs(arcOne: ArcAngle, arcTwo: ArcAngle): {arcOne: ArcAngle, arcTwo: ArcAngle} {
+    // get point between the two centers
+    // if the point is in the sector created by the arc, the arc should be removed
+
+    const vectorBetweenCenters = subVectors(arcTwo.center, arcOne.center);
+    const halfVectorBetweenCenters: Vector = {
+        x: vectorBetweenCenters.x / 2,
+        y: vectorBetweenCenters.y / 2,
+        z: vectorBetweenCenters.z / 2,
+    }
+
+    const center = addVectors(arcOne.center, halfVectorBetweenCenters);
+
+    const isOnFirstArc = isPointOnArc(arcOne, center);
+    const isOnSecondArc = isPointOnArc(arcTwo, center);
+
+    if (isOnFirstArc) {
+        arcOne.enabled = false;
+    }
+
+    if (isOnSecondArc) {
+        arcTwo.enabled = false;
+    }
+
+    return {
+        arcOne,
+        arcTwo,
+    };
+}
+
 function drawGroup(group: Bean[]): void {
     let breakingPoints: number[][] = [[]];
     for (let i = 0; i < group.length; i++) {
@@ -467,7 +497,14 @@ function drawGroup(group: Bean[]): void {
         arcs = arcs.concat(newArcs);
     }
 
-    console.log(arcs)
+    for (let i = 0; i < arcs.length; i++) {
+        for (let j = i; j < arcs.length; j++) {
+            const {arcOne, arcTwo} = trimArcs(arcs[i], arcs[j]);
+
+            arcs[i] = arcOne;
+            arcs[j] = arcTwo;
+        }
+    }
 
     renderArcs(arcs)    
 
