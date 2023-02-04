@@ -38,15 +38,17 @@ function vectorMagnitude(a: Vector): number {
 function lerp(t: number, start: number, end: number): number;
 function lerp(t: number, start: Vector, end: Vector): Vector;
 
-function lerp(t: number, start: unknown, end: unknown): unknown {
-    if (typeof(start) === "number") {
+function lerp(t: number, start: Vector | number, end: Vector | number): Vector | number {
+    if (typeof(start) === "number" && typeof(end) === "number") {
         return start * t + end * (1 - t);
-    } else {
+    } else if ((<Vector>start).x != undefined) {
         return {
-            x: lerp(t, start.x, end.x),
-            y: lerp(t, start.y, end.y),
-            z: lerp(t, start.z, end.z)
+            x: lerp(t, (<Vector>start).x, (<Vector>end).x),
+            y: lerp(t, (<Vector>start).y, (<Vector>end).y),
+            z: lerp(t, (<Vector>start).z, (<Vector>end).z)
         }
+    } else {
+        return 0;
     }
 }
 
@@ -62,7 +64,7 @@ window.addEventListener("keydown", (e) => {
         if (done) {
             return; 
         }
-        trimNext();
+        // trimNext();
     }
 })
 
@@ -425,7 +427,7 @@ function renderArcs(arcs: ArcAngle[]): void {
 function drawGroup(group: Bean[]): void {
     let breakingPoints: number[][] = [[]];
     for (let i = 0; i < group.length; i++) {
-        breakingPoints.push();
+        breakingPoints.push([]);
         
         for (let j = 0; j < group.length; j++) {
             const {posOne, posTwo} = getPoints(group[i], group[j]);
@@ -433,21 +435,27 @@ function drawGroup(group: Bean[]): void {
             const thetaOne = angleFromCenter(posOne, group[i].pos);
             const thetaTwo = angleFromCenter(posTwo, group[i].pos);
 
+            if (Number.isNaN(thetaOne)) continue;
+
             breakingPoints[i].push(thetaOne);
             breakingPoints[i].push(thetaTwo);
         }
     }
+
+    // console.log(breakingPoints);
 
     let arcs: ArcAngle[] = [] as ArcAngle[];
 
     for (let i = 0; i < group.length; i++) {
         let newArcs: ArcAngle[] = [] as ArcAngle[];
 
-        breakingPoints[i].sort();
+        breakingPoints[i] = breakingPoints[i].sort((a, b) => {
+            return (b + 2 * Math.PI) % (2 * Math.PI) - (a + 2 * Math.PI) % (2 * Math.PI)
+        });
 
         for (let j = 0; j < breakingPoints[i].length; j++) {
-            const indexOne = i;
-            const indexTwo = i == breakingPoints[i].length - 1 ? 0 : i + 1;
+            const indexOne = j;
+            const indexTwo = j == breakingPoints[i].length - 1 ? 0 : j + 1;
 
             newArcs.push({
                 center: group[i].pos,
@@ -455,9 +463,11 @@ function drawGroup(group: Bean[]): void {
                 end: breakingPoints[i][indexTwo],
                 enabled: true
             })
-        }   
-        arcs.concat(newArcs);
+        }
+        arcs = arcs.concat(newArcs);
     }
+
+    console.log(arcs)
 
     renderArcs(arcs)    
 
@@ -522,8 +532,8 @@ function finishMoving(beans: Bean[]) {
 
     // console.log(largestGroup)
 
-    drawBeans(largestGroup);
-    drawGroup(largestGroup);
+    // drawBeans(largestGroup);
+    // drawGroup(largestGroup);
     
     // groups.forEach((group: Bean[]) => {
     //     drawGroup(group);
@@ -582,8 +592,8 @@ function generateIsland() {
         posChange: zero,
     }
     
-    // drawBeans([firstBean, secondBean, thirdBean, fourthBean]);
-    // drawGroup([firstBean, secondBean, thirdBean, fourthBean]);
+    drawBeans([firstBean, secondBean, thirdBean, fourthBean]);
+    drawGroup([firstBean, secondBean, thirdBean, fourthBean]);
 
     intervalID = window.setInterval(() => {
         // drawBeans(beans);
