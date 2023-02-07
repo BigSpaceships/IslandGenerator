@@ -52,6 +52,10 @@ function lerp(t: number, start: Vector | number, end: Vector | number): Vector |
     }
 }
 
+function approxEqual(val1: number, val2: number): boolean {
+    return Math.abs(val1 - val2) < 0.0001;
+}
+
 let currentI = 0;
 let currentJ = 0;
 
@@ -312,16 +316,6 @@ function shortestPath(group: Bean[]) {
 }
 
 function radiansTraveled(start: number, end: number): number {
-    // const startPositive = (start % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-    // const endPositive = (end % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
-
-    // if (startPositive > endPositive) {
-        // return start - end;
-    // }
-
-    // return 2 * Math.PI - (end - start);
-    // console.log(2 * Math.PI)
-
     return (start - end + 2 * Math.PI) % (2 * Math.PI); 
 }
 
@@ -364,6 +358,14 @@ function getIndex(center: Vector): number {
     return centers.indexOf(center);
 }
 
+function getPointFromNumber(center: Vector, angle: number): Vector {
+    return {
+        x: Math.cos(angle) * arcRadius + center.x,
+        y: Math.sin(angle) * arcRadius + center.y,
+        z: 0,
+    }
+}
+
 function renderArcs(arcs: ArcAngle[]): void {
     
     while (pathParentElement?.lastChild) {
@@ -377,19 +379,11 @@ function renderArcs(arcs: ArcAngle[]): void {
 
         if (!arc.enabled) continue;
 
-        const distance = radiansTraveled(arc.start, arc.end)
+        const distance = radiansTraveled(arc.start, arc.end);
         
-        const posOne: Vector = {
-            x: Math.cos(arc.start) * arcRadius + arc.center.x,
-            y: Math.sin(arc.start) * arcRadius + arc.center.y,
-            z: 0,
-        }
+        const posOne = getPointFromNumber(arc.center, arc.start);
 
-        const posTwo: Vector = {
-            x: Math.cos(arc.end) * arcRadius + arc.center.x,
-            y: Math.sin(arc.end) * arcRadius + arc.center.y,
-            z: 0,
-        }
+        const posTwo = getPointFromNumber(arc.center, arc.end);
 
         const isLarge = distance > Math.PI;
 
@@ -425,8 +419,6 @@ function renderArcs(arcs: ArcAngle[]): void {
 }
 
 function trimArcs(arcOne: ArcAngle, arcTwo: ArcAngle): {arcOne: ArcAngle, arcTwo: ArcAngle} {
-    // get point between the two centers
-    // if the point is in the sector created by the arc, the arc should be removed
 
     const vectorBetweenCenters = subVectors(arcTwo.center, arcOne.center);
     const halfVectorBetweenCenters: Vector = {
@@ -497,14 +489,45 @@ function drawGroup(group: Bean[]): void {
         arcs = arcs.concat(newArcs);
     }
 
-    for (let i = 0; i < arcs.length; i++) {
-        for (let j = i; j < arcs.length; j++) {
-            const {arcOne, arcTwo} = trimArcs(arcs[i], arcs[j]);
+    // 1) make a list of what arcs are at each point: done
+    // 2) at each point, there are a few start arcs and end arcs and there can only be one 
+    // 3) eliminate the ones that are closer together (the ones remaining should have the greatest angle between the arc centers and the point. probably just maximize the distance between the two arc centers)
 
-            arcs[i] = arcOne;
-            arcs[j] = arcTwo;
+    const pointIndicies: Vector[] = [];
+    const pointToArcs: number[][] = [];
+
+    for (let i = 0; i < arcs.length; i++) {
+        const element = arcs[i];
+        const startPos = getPointFromNumber(element.center, element.start);
+        const endPos = getPointFromNumber(element.center, element.end);
+
+        let startIndex = pointIndicies.findIndex((val) => {
+            return approxEqual(val.x, startPos.x) && approxEqual(val.y, startPos.y);
+        });
+
+        if (startIndex == -1) {
+            startIndex = pointIndicies.length;
+            pointIndicies.push(startPos);
+            pointToArcs.push([])
         }
+
+        pointToArcs[startIndex].push(i);
+
+        let endIndex = pointIndicies.findIndex((val) => {
+            return approxEqual(val.x, endPos.x) && approxEqual(val.y, endPos.y);
+        });
+
+        if (endIndex == -1) {
+            endIndex = pointIndicies.length;
+            pointIndicies.push(endPos);
+            pointToArcs.push([]);
+        }
+
+        pointToArcs[endIndex].push(i);
     }
+
+    console.log(pointIndicies)
+    console.log(pointToArcs);
 
     renderArcs(arcs)    
 
